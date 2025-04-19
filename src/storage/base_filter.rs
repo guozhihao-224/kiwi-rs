@@ -29,7 +29,7 @@ impl CompactionFilter for BaseMetaFilter {
 
         if value.is_empty() {
             debug!(
-                "BaseMetaFilter: Value for key {:?} is empty, keeping.",
+                "BaseMetaFilter: Value for key {:?} is empty, remove.",
                 parsed_key.key()
             );
             return CompactionDecision::Remove;
@@ -39,7 +39,7 @@ impl CompactionFilter for BaseMetaFilter {
             Ok(dt) => dt,
             Err(_) => {
                 debug!(
-                    "BaseMetaFilter: Invalid data type byte {} for key {:?}, remove",
+                    "BaseMetaFilter: Invalid data type byte {} for key {:?}, remove.",
                     value[0],
                     parsed_key.key()
                 );
