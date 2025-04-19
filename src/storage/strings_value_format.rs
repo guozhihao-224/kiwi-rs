@@ -1,7 +1,7 @@
 use super::base_value_format::DataType;
-use super::error::Result;
 use super::base_value_format::InternalValue;
 use super::base_value_format::ParsedInternalValue;
+use super::error::Result;
 use super::storage_define::{
     STRING_VALUE_SUFFIXLENGTH, SUFFIX_RESERVE_LENGTH, TIMESTAMP_LENGTH, TYPE_LENGTH,
 };
@@ -53,15 +53,15 @@ impl InternalValue for StringValue {
 
         buf
     }
-    
+
     fn set_etime(&mut self, etime: u64) {
         self.etime = etime;
     }
-    
+
     fn set_ctime(&mut self, ctime: u64) {
         self.ctime = ctime;
     }
-    
+
     fn set_relative_timestamp(&mut self, ttl: u64) {
         self.etime = Utc::now().timestamp_micros() as u64 + ttl;
     }
@@ -81,7 +81,7 @@ impl<'a> ParsedInternalValue<'a> for ParsedStringsValue {
         debug_assert!(input_data.len() >= STRING_VALUE_SUFFIXLENGTH);
 
         let data = Bytes::copy_from_slice(input_data);
-        let data_type = DataType::try_from(data[0] as u8)?;
+        let data_type = DataType::try_from(data[0])?;
 
         let user_value_len = data.len() - TYPE_LENGTH - STRING_VALUE_SUFFIXLENGTH;
         let user_value_start = TYPE_LENGTH;
@@ -109,23 +109,23 @@ impl<'a> ParsedInternalValue<'a> for ParsedStringsValue {
     }
 
     fn data_type(&self) -> DataType {
-        return self.data_type;
+        self.data_type
     }
 
     fn user_value(&self) -> &[u8] {
-        return &self.data[self.user_value_range.clone()];
+        &self.data[self.user_value_range.clone()]
     }
 
     fn ctime(&self) -> u64 {
-        return self.ctime;
+        self.ctime
     }
 
     fn etime(&self) -> u64 {
-        return self.etime;
+        self.etime
     }
 
     fn reserve(&self) -> &[u8] {
-        return &self.data[self.reserve_range.clone()];
+        &self.data[self.reserve_range.clone()]
     }
 
     fn filter_decision(&self, current_time: u64) -> rocksdb::CompactionDecision {

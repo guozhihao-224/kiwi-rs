@@ -48,16 +48,14 @@ impl CompactionFilter for BaseMetaFilter {
         };
         match data_type {
             DataType::String => match ParsedStringsValue::new(value) {
-                Ok(pv) => {
-                    return pv.filter_decision(current_time);
-                }
+                Ok(pv) => pv.filter_decision(current_time),
                 Err(e) => {
                     debug!(
                         "BaseMetaFilter: Failed to parse Strings value for key {:?}: {}, remove.",
                         parsed_key.key(),
                         e
                     );
-                    return CompactionDecision::Remove;
+                    CompactionDecision::Remove
                 }
             },
             DataType::List => {
@@ -77,7 +75,7 @@ impl CompactionFilterFactory for BaseMetaFilterFactory {
         &mut self,
         _context: rocksdb::compaction_filter_factory::CompactionFilterContext,
     ) -> Self::Filter {
-        BaseMetaFilter::default()
+        BaseMetaFilter
     }
 
     fn name(&self) -> &std::ffi::CStr {
@@ -96,14 +94,25 @@ mod tests {
         let string_val: &'static [u8] = b"filter_val";
         let mut string_val = crate::storage::strings_value_format::StringValue::new(string_val);
         let ttl = 1_000_000; // 1 秒 = 1,000,000 微秒
-        crate::storage::base_value_format::InternalValue::set_relative_timestamp(&mut string_val, ttl);
+        crate::storage::base_value_format::InternalValue::set_relative_timestamp(
+            &mut string_val,
+            ttl,
+        );
 
-        let decision = filter.filter(0, b"filter_key", &crate::storage::base_value_format::InternalValue::encode(&string_val));
+        let decision = filter.filter(
+            0,
+            b"filter_key",
+            &crate::storage::base_value_format::InternalValue::encode(&string_val),
+        );
         assert!(matches!(decision, CompactionDecision::Keep));
 
         std::thread::sleep(std::time::Duration::from_secs(2));
 
-        let decision = filter.filter(0, b"filter_key", &crate::storage::base_value_format::InternalValue::encode(&string_val));
+        let decision = filter.filter(
+            0,
+            b"filter_key",
+            &crate::storage::base_value_format::InternalValue::encode(&string_val),
+        );
         assert!(matches!(decision, CompactionDecision::Remove));
     }
 }
