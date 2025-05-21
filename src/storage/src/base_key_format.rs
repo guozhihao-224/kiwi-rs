@@ -12,11 +12,11 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use crate::kstd::slice::Slice;
-use crate::storage::storage_define::{
+use crate::storage_define::{
     ENCODED_KEY_DELIM_SIZE, NEED_TRANSFORM_CHARACTER, PREFIX_RESERVE_LENGTH, SUFFIX_RESERVE_LENGTH,
     decode_user_key, encode_user_key,
 };
+use kstd::slice::Slice;
 
 //
 // used for string data key or hash/zset/set/list's meta key. format:

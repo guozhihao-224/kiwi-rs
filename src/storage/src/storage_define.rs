@@ -12,7 +12,7 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use crate::kstd::slice::Slice;
+use kstd::slice::Slice;
 
 pub const PREFIX_RESERVE_LENGTH: usize = 8;
 // const VERSION_LENGTH: usize = 8;

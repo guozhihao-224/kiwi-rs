@@ -5,7 +5,7 @@ use rocksdb::{
     compaction_filter_factory::CompactionFilterFactory,
 };
 
-use crate::storage::{
+use crate::{
     base_key_format::ParsedBaseKey,
     base_value_format::{DataType, ParsedInternalValue},
     strings_value_format::ParsedStringsValue,
@@ -92,17 +92,14 @@ mod tests {
         let mut filter = BaseMetaFilter::default();
 
         let string_val: &'static [u8] = b"filter_val";
-        let mut string_val = crate::storage::strings_value_format::StringValue::new(string_val);
+        let mut string_val = crate::strings_value_format::StringValue::new(string_val);
         let ttl = 1_000_000; // 1 秒 = 1,000,000 微秒
-        crate::storage::base_value_format::InternalValue::set_relative_timestamp(
-            &mut string_val,
-            ttl,
-        );
+        crate::base_value_format::InternalValue::set_relative_timestamp(&mut string_val, ttl);
 
         let decision = filter.filter(
             0,
             b"filter_key",
-            &crate::storage::base_value_format::InternalValue::encode(&string_val),
+            &crate::base_value_format::InternalValue::encode(&string_val),
         );
         assert!(matches!(decision, CompactionDecision::Keep));
 
@@ -111,7 +108,7 @@ mod tests {
         let decision = filter.filter(
             0,
             b"filter_key",
-            &crate::storage::base_value_format::InternalValue::encode(&string_val),
+            &crate::base_value_format::InternalValue::encode(&string_val),
         );
         assert!(matches!(decision, CompactionDecision::Remove));
     }

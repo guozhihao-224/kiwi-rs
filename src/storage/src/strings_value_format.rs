@@ -1,4 +1,4 @@
-use crate::storage::error::StorageError;
+use crate::error::StorageError;
 
 use super::base_value_format::DataType;
 use super::base_value_format::InternalValue;
