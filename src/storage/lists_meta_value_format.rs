@@ -22,12 +22,19 @@ use crate::storage::{
 use bytes::{BufMut, Bytes, BytesMut};
 use chrono::Utc;
 
+use super::{
+    error::{Result, StorageError},
+    storage_define::{
+        BASE_META_VALUE_COUNT_LENGTH, BASE_META_VALUE_SUFFIX_LENGTH, LISTS_META_VALUE_SUFFIX_LENGTH,
+    },
+};
+
 const INITIAL_LEFT_INDEX: u64 = 9_223_372_036_854_775_807;
 const INITIAL_RIGHT_INDEX: u64 = 9_223_372_036_854_775_808;
 
 /*
- *| type  | list_len | version | left index | right index | reserve |  cdate | timestamp |
- *|  1B   |    4B    |    8B   |     8B     |      8B     |   16B   |    8B  |     8B    |
+ *| type  | count | version | left index | right index | reserve |  cdate | timestamp |
+ *|  1B   |  4B   |    8B   |     8B     |      8B     |   16B   |    8B  |     8B    |
  */
 pub struct ListsMetaValue {
     inner: InternalValue,
@@ -51,7 +58,7 @@ impl ListsMetaValue {
         let needed = TYPE_LENGTH
             + self.inner.user_value.len()
             + VERSION_LENGTH
-            + LIST_VALUE_INDEX_LENGTH
+            + 2 * LIST_VALUE_INDEX_LENGTH
             + SUFFIX_RESERVE_LENGTH
             + 2 * TIMESTAMP_LENGTH;
         let mut buf = BytesMut::with_capacity(needed);
@@ -102,20 +109,115 @@ pub struct ParsedListsMetaValue {
 }
 
 impl ParsedListsMetaValue {
-    pub fn new() {}
+    pub fn new<T>(internal_value: T) -> Result<Self>
+    where
+        T: Into<BytesMut>,
+    {
+        let value = internal_value.into();
+        let value_len = value.len();
+        // TODO : 这里需要校验一下value的长度
+        if value.len() < LISTS_META_VALUE_SUFFIX_LENGTH {
+            return Err(StorageError::InvalidFormat(format!(
+                "invalid lists meta value length: {} < {}",
+                value.len(),
+                LISTS_META_VALUE_SUFFIX_LENGTH,
+            )));
+        }
 
-    pub fn strip_suffix() {}
+        let data_type = value[0].try_into()?;
 
-    pub fn set_version_to_value() {}
+        let mut pos = TYPE_LENGTH;
 
-    pub fn set_ctime_to_value() {}
+        let count_range = pos..pos + BASE_META_VALUE_COUNT_LENGTH;
+        let mut count_bytes = [0u8; BASE_META_VALUE_COUNT_LENGTH];
+        count_bytes.copy_from_slice(&value[pos..pos + BASE_META_VALUE_COUNT_LENGTH]);
+        let count = u64::from_le_bytes(count_bytes);
+        pos += BASE_META_VALUE_COUNT_LENGTH;
 
-    pub fn set_etime_to_value() {}
+        let mut version_bytees = [0u8; VERSION_LENGTH];
+        version_bytees.copy_from_slice(&value[pos..pos + VERSION_LENGTH]);
+        let version = u64::from_le_bytes(version_bytees);
+        pos += VERSION_LENGTH;
 
-    pub fn set_index_to_value() {}
+        let mut left_index_bytes = [0u8; LIST_VALUE_INDEX_LENGTH];
+        left_index_bytes.copy_from_slice(&value[pos..pos + LIST_VALUE_INDEX_LENGTH]);
+        let left_index = u64::from_le_bytes(left_index_bytes);
+        pos += LIST_VALUE_INDEX_LENGTH;
+
+        let mut right_index_bytes = [0u8; LIST_VALUE_INDEX_LENGTH];
+        right_index_bytes.copy_from_slice(&value[pos..pos + LIST_VALUE_INDEX_LENGTH]);
+        let right_index = u64::from_le_bytes(right_index_bytes);
+        pos += LIST_VALUE_INDEX_LENGTH;
+
+        let reserve_range = pos..pos + SUFFIX_RESERVE_LENGTH;
+        pos += SUFFIX_RESERVE_LENGTH;
+
+        let mut ctime_bytes = [0u8; TIMESTAMP_LENGTH];
+        ctime_bytes.copy_from_slice(&value[pos..pos + TIMESTAMP_LENGTH]);
+        let ctime = u64::from_le_bytes(ctime_bytes);
+        pos += TIMESTAMP_LENGTH;
+
+        let mut etime_bytes = [0u8; TIMESTAMP_LENGTH];
+        etime_bytes.copy_from_slice(&value[pos..pos + TIMESTAMP_LENGTH]);
+        let etime = u64::from_le_bytes(etime_bytes);
+
+        Ok(Self {
+            base: ParsedInternalValue::new(
+                value,
+                data_type,
+                count_range,
+                reserve_range,
+                version,
+                ctime,
+                etime,
+            ),
+            count,
+            left_index,
+            right_index,
+        })
+    }
+
+    // TODO: 不确定是否需要这个
+    pub fn strip_suffix(&mut self) {}
+
+    pub fn set_version_to_value(&mut self) {
+        let version_start = TYPE_LENGTH + BASE_META_VALUE_COUNT_LENGTH;
+        let version_bytes = self.base.version.to_le_bytes();
+        let dst = &mut self.base.value[version_start..version_start + VERSION_LENGTH];
+        dst.copy_from_slice(&version_bytes);
+    }
+
+    pub fn set_ctime(&mut self, ctime: u64) {
+        self.base.ctime = ctime;
+        self.set_ctime_to_value();
+    }
+
+    pub fn set_ctime_to_value(&mut self) {
+        let ctime_start = self.base.value.len() - 2 * TIMESTAMP_LENGTH;
+        let ctime_bytes = self.base.ctime.to_le_bytes();
+        let dst = &mut self.base.value[ctime_start..ctime_start + TIMESTAMP_LENGTH];
+        dst.copy_from_slice(&ctime_bytes);
+    }
+
+    pub fn set_etime(&mut self, ctime: u64) {
+        self.base.etime = ctime;
+        self.set_etime_to_value();
+    }
+
+    pub fn set_etime_to_value(&mut self) {
+        let etime_start = self.base.value.len() - TIMESTAMP_LENGTH;
+        let etime_bytes = self.base.etime.to_le_bytes();
+        let dst = &mut self.base.value[etime_start..etime_start + TIMESTAMP_LENGTH];
+        dst.copy_from_slice(&etime_bytes);
+    }
+
+    pub fn set_index_to_value(&mut self) {}
 
     pub fn initial_meta_value(&mut self) -> u64 {
-        
+        self.set_count(0);
+        self.set_left_index(INITIAL_LEFT_INDEX);
+        self.set_right_index(INITIAL_RIGHT_INDEX);
+        0
     }
 
     pub fn is_valid(&self) -> bool {
@@ -128,25 +230,25 @@ impl ParsedListsMetaValue {
 
     pub fn set_count(&mut self, count: u64) {}
 
-    pub fn modify_count() {}
+    pub fn modify_count(&mut self, delta: u64) {}
 
-    pub fn update_version() {}
+    pub fn update_version(&mut self) -> u64 {}
 
     pub fn left_index(&self) -> u64 {
         self.left_index
     }
 
-    pub fn set_left_index() {}
+    pub fn set_left_index(&mut self, index: u64) {}
 
-    pub fn modify_left_index() {}
+    pub fn modify_left_index(&mut self, index: u64) {}
 
     pub fn right_index(&self) -> u64 {
         self.right_index
     }
 
-    pub fn set_right_index() {}
+    pub fn set_right_index(&mut self, index: u64) {}
 
-    pub fn modify_right_index() {}
+    pub fn modify_right_index(&mut self, index: u64) {}
 }
 
 #[cfg(test)]
